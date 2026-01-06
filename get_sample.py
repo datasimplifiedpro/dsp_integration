@@ -1,12 +1,14 @@
 # python libs
 import logging
 from datetime import datetime
+import asyncio
+from onepassword.client import Client
 
 
 # my libs
 from etl_utils.decorator import log_etl_job
 from etl_utils.logger import ETLLogger
-from get_sample_utils import get_db_integration
+from get_sample_utils import get_db_integration, get_1p_secret
 from app_config import DB_CONFIG
 from db_utils import get_mysql_engine
 
@@ -47,6 +49,8 @@ logging.debug('Vida campaigns starting here!')
 
 # list of Club IDs to substitute into the API URL
 integration_df = get_db_integration()
+# creds_df = await get_1p_secret("Tonehouse", "MINDBODY PROD API Credentials")
+creds_df = asyncio.run(get_1p_secret("Tonehouse", "MINDBODY PROD API Credentials"))
 
 # Step through each club's active member
 for row in club_df.itertuples():

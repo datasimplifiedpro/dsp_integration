@@ -11,7 +11,7 @@ from six import integer_types
 from sqlalchemy import text
 
 # my libs
-from app_config import DB_CONFIG
+from app_config import DB_CONFIG, ONEP_HEADER
 from db_utils import get_mysql_engine
 import asyncio
 from onepassword.client import Client
@@ -59,30 +59,32 @@ def get_db_integration():
         print("Error reading vw_integration:", e)
     return df
 
-async def
-def get_1p_secret(vault, item, field):
-    try:
-        client = Client()
 
-        # Get vault
-        vaults = await client.vaults.get_all()
-        vault = next((v for v in vaults if v.name == vault_name), None)
-        if not vault:
-            raise ValueError(f"Vault '{vault_name}' not found")
+async def get_1p_secret(vault, item):
+    # Authenticate with service account token if provided
 
-        # Get item
-        items = await client.items.get_all(vault.id)
-        item = next((i for i in items if i.title == item_name), None)
-        if not item:
-            raise ValueError(f"Item '{item_name}' not found")
+    onep_header = {**ONEP_HEADER}
 
-        # Get full item with fields
-        full_item = await client.items.get(vault.id, item.id)
+    client = await Client.authenticate(**ONEP_HEADER)
 
-        df = pd.read_sql("select * from vw_integration", con=engine)
-    except Error as e:
-        print("Error reading vw_integration:", e)
-    return df
+    # Get vault
+    vaults = await client.vaults.get_all()
+    vault_name = next((v for v in vaults if v.name == vault), None)
+    if not vault_name:
+        raise ValueError(f"Vault '{vault_name}' not found")
+
+    # Get item
+    items = await client.items.get_all(vault.id)
+    item_name = next((i for i in items if i.title == item), None)
+    if not item_name:
+        raise ValueError(f"Item '{item_name}' not found")
+
+    # Get full item with fields
+    full_item = await client.items.get(vault.id, item.id)
+
+    # Return all fields as dictionary
+    return {field.label: field.value for field in full_item.fields}
+
 
 
 def get_api_abc_club_pos_transacts(url):

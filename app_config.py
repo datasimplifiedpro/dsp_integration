@@ -27,8 +27,6 @@ if len(sys.argv) > 3:
 print(f"Running in environment: {environment}")
 
 host_env = "DB_HOST_" + environment
-
-host_env = "DB_HOST_" + environment
 port_env = "DB_PORT_" + environment
 database_env = "DB_NAME_" + environment
 user_env = "DB_USER_" + environment
@@ -42,6 +40,11 @@ DB_CONFIG = {
     "password": os.getenv(password_env, "<PASSWORD>"),
 }
 
+ONEP_HEADER = {
+    "auth": os.getenv('1P_TOKEN'),
+    "integration_name": os.getenv('1P_INT_NAME'),
+    "integration_version": os.getenv('1P_INT_VERSION')
+}
 
 # Zenoti keys for the request
 ZENOTI_API_KEYS = {
