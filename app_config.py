@@ -27,6 +27,8 @@ if len(sys.argv) > 3:
 print(f"Running in environment: {environment}")
 
 host_env = "DB_HOST_" + environment
+
+host_env = "DB_HOST_" + environment
 port_env = "DB_PORT_" + environment
 database_env = "DB_NAME_" + environment
 user_env = "DB_USER_" + environment

@@ -1,0 +1,15 @@
+logging
+datetime
+python-dotenv
+mysql-connector-python
+SQLAlchemy
+python-dateutil
+requests
+pandas
+numpy
+PyMySQL
+SQLAlchemy
+python-dateutil
+mysql-connector-python
+python-dotenv
+onepassword-sdk
