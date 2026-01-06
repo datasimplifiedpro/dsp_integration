@@ -1,0 +1,7 @@
+/root/abc_to_mailchimp/log/app.log {
+    daily
+    rotate 90
+    missingok
+    notifempty
+    dateext
+}
