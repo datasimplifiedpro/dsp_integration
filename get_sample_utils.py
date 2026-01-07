@@ -88,6 +88,11 @@ async def get_1p_secret(vault, item):
     # Get full item with fields
     full_item = await client.items.get(vault_name.id, item_name.id)
 
+    # Print field names
+    print("\nAvailable fields:")
+    for field in full_item.fields:
+        print(f"  - {field.title}")
+
     # Return all fields as dictionary
     return {field.title: field.value for field in full_item.fields}
 

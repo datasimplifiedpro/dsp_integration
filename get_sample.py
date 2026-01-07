@@ -52,9 +52,9 @@ integration_df = get_db_integration()
 # creds_df = await get_1p_secret("Tonehouse", "MINDBODY PROD API Credentials")
 creds_df = asyncio.run(get_1p_secret("Tonehouse", "MINDBODY PROD API Credentials "))
 
-credential = creds.get('credential')
-site_id = creds.get('site_id')
-version = creds.get('version')
+credential = creds_df.get('credential')
+site_id = creds_df.get('site_id')
+version = creds_df.get('version')
 
 # Step through each club's active member
 for row in club_df.itertuples():
