@@ -11,7 +11,7 @@ from six import integer_types
 from sqlalchemy import text
 
 # my libs
-from app_config import DB_CONFIG, ONEP_HEADER
+from app_config import ONEP_HEADER
 from db_utils import get_mysql_engine
 import asyncio
 from onepassword.client import Client

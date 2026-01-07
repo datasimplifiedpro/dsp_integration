@@ -8,7 +8,7 @@ from onepassword.client import Client
 # my libs
 from etl_utils.decorator import log_etl_job
 from etl_utils.logger import ETLLogger
-from get_sample_utils import get_db_integration, get_all_1p_vaults_and_items
+from get_sample_utils import get_db_integration
 from get_secret_utils import get_1p_secret, get_1p_secrets
 from app_config import DB_CONFIG
 from db_utils import get_mysql_engine
@@ -57,14 +57,11 @@ itemid = integration_df['item_id'].iloc[0]
 # This is what we will use for fetching fields from a specific vault and item
 creds_df = asyncio.run(get_1p_secret(vaultid, itemid))
 
-# this fetches all the items and vaults with their relevant ids
-all_creds_df = asyncio.run(get_all_1p_vaults_and_items())
-
 # this is the inital attempt (loops though each item in the valut to get the object) then it finds the item we asked for and extracts the item.id from the object to fetch the creds
 # all_creds_df = asyncio.run(get_1p_secrets("Tonehouse", "API Metadata Database TEST"))
 
 # use case example
-# credential = creds_df.get('credential')
+credential = creds_df.get('credential')
 
 
 # Step through each club's active member

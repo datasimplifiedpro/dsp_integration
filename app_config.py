@@ -4,7 +4,6 @@ import sys
 from dotenv import load_dotenv
 import asyncio
 from onepassword.client import Client
-from get_secret_utils import get_1p_secret
 
 #       Calling Prog Envi    job    seq
 #       ------------ ------- ------ ---
@@ -33,6 +32,17 @@ if len(sys.argv) > 3:
     sqlseq = sys.argv[3]
 
 print(f"Running in environment: {environment}")
+
+async def get_1p_secret(vault_id, item_id):
+    # Authenticate with service account token if provided
+
+    client = await Client.authenticate(**ONEP_HEADER)
+
+    # Get full item with fields
+    full_item = await client.items.get(vault_id, item_id)
+
+    # Return all fields as dictionary
+    return {field.title: field.value for field in full_item.fields}
 
 #temporary for testing, eventually we will pull the ids from vw_integration (line 72)
 vaultid_test = "tutnr7sl57s35f7e6pmzer2tuy"
