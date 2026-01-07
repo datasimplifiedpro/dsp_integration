@@ -13,3 +13,4 @@ python-dateutil
 mysql-connector-python
 python-dotenv
 onepassword-sdk
+cryptography

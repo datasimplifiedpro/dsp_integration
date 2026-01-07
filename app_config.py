@@ -2,6 +2,8 @@
 import os
 import sys
 from dotenv import load_dotenv
+import asyncio
+from onepassword.client import Client
 
 #       Calling Prog Envi    job    seq
 #       ------------ ------- ------ ---
@@ -13,6 +15,11 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+ONEP_HEADER = {
+    "auth": os.getenv('1P_TOKEN'),
+    "integration_name": os.getenv('1P_INT_NAME'),
+    "integration_version": os.getenv('1P_INT_VERSION')
+}
 
 # initialize vars
 jobname = '' # if not blank, fetch jobseq using jobname
@@ -26,25 +33,72 @@ if len(sys.argv) > 3:
 
 print(f"Running in environment: {environment}")
 
-host_env = "DB_HOST_" + environment
-port_env = "DB_PORT_" + environment
-database_env = "DB_NAME_" + environment
-user_env = "DB_USER_" + environment
-password_env = "DB_PASSWORD_" + environment
+async def get_1p_secret(vault_id, item_id):
+    # Authenticate with service account token if provided
+    client = await Client.authenticate(**ONEP_HEADER)
+
+    # Get full item with fields
+    full_item = await client.items.get(vault_id, item_id)
+
+    # Return all fields as dictionary
+    return {field.title: field.value for field in full_item.fields}
+
+#temporary for testing, eventually we will pull the ids from vw_integration (line 72)
+vaultid_test = "tutnr7sl57s35f7e6pmzer2tuy"
+itemid_test = "djpqkjqlrhc3bptyvtgl7v2z7m"
+
+vaultid_prod = "tutnr7sl57s35f7e6pmzer2tuy"
+itemid_prod = "qxlbvydemo345ewg7xdszyth4u"
+
+creds_df_TEST = asyncio.run(get_1p_secret(vaultid_test, itemid_test))
+creds_df_PROD = asyncio.run(get_1p_secret(vaultid_prod, itemid_prod))
+
+creds_by_env = {
+    "TEST": creds_df_TEST,
+    "PROD": creds_df_PROD
+}
+
+# Dynamically select the credentials based on environment
+creds = creds_by_env[environment]
 
 DB_CONFIG = {
-    "host": os.getenv(host_env, "localhost"),
-    "port": int(os.getenv(port_env, 3306)),
-    "database": os.getenv(database_env, "vidamemb"),
-    "user": os.getenv(user_env, "root"),
-    "password": os.getenv(password_env, "<PASSWORD>"),
+    "host": creds.get('server'),
+    "port": int(creds.get('port')),
+    "database": creds.get('database'),
+    "user": creds.get('username'),
+    "password": creds.get('password')
 }
 
-ONEP_HEADER = {
-    "auth": os.getenv('1P_TOKEN'),
-    "integration_name": os.getenv('1P_INT_NAME'),
-    "integration_version": os.getenv('1P_INT_VERSION')
-}
+# def get_db_integration():
+#     try:
+#         df = pd.read_sql("select * from vw_integration", con=engine)
+#     except Error as e:
+#         print("Error reading vw_integration:", e)
+#     return df
+
+# # list of Club IDs to substitute into the API URL
+# integration_df = get_db_integration()
+#
+# vaultid = integration_df['vault_id'].iloc[0]
+# itemid = integration_df['item_id'].iloc[0]
+
+
+
+# host_env = "DB_HOST_" + environment
+# port_env = "DB_PORT_" + environment
+# database_env = "DB_NAME_" + environment
+# user_env = "DB_USER_" + environment
+# password_env = "DB_PASSWORD_" + environment
+#
+# DB_CONFIG = {
+#     "host": os.getenv(host_env, "localhost"),
+#     "port": int(os.getenv(port_env, 3306)),
+#     "database": os.getenv(database_env, "vidamemb"),
+#     "user": os.getenv(user_env, "root"),
+#     "password": os.getenv(password_env, "<PASSWORD>"),
+# }
+
+
 
 # Zenoti keys for the request
 ZENOTI_API_KEYS = {
