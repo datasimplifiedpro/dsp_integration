@@ -50,7 +50,11 @@ logging.debug('Vida campaigns starting here!')
 # list of Club IDs to substitute into the API URL
 integration_df = get_db_integration()
 # creds_df = await get_1p_secret("Tonehouse", "MINDBODY PROD API Credentials")
-creds_df = asyncio.run(get_1p_secret("Tonehouse", "MINDBODY PROD API Credentials"))
+creds_df = asyncio.run(get_1p_secret("Tonehouse", "MINDBODY PROD API Credentials "))
+
+credential = creds.get('credential')
+site_id = creds.get('site_id')
+version = creds.get('version')
 
 # Step through each club's active member
 for row in club_df.itertuples():

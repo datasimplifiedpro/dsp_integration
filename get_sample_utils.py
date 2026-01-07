@@ -68,22 +68,28 @@ async def get_1p_secret(vault, item):
     client = await Client.authenticate(**ONEP_HEADER)
 
     # Get vault
-    vaults = await client.vaults.get_all()
-    vault_name = next((v for v in vaults if v.name == vault), None)
+    vaults = await client.vaults.list()
+    vault_name= next((v for v in vaults if v.title == vault), None)
     if not vault_name:
-        raise ValueError(f"Vault '{vault_name}' not found")
+        raise ValueError(f"Vault '{vault}' not found")
 
     # Get item
-    items = await client.items.get_all(vault.id)
-    item_name = next((i for i in items if i.title == item), None)
+    items = await client.items.list(vault_name.id)
+
+    # DEBUG: Print all items to see what's available
+    print(f"\nItems in vault '{vault_name}':")
+    for i in items:
+        print(f"  - '{i.title}'")
+
+    item_name = next((i for i in items if i.title.strip() == item.strip()), None)
     if not item_name:
-        raise ValueError(f"Item '{item_name}' not found")
+        raise ValueError(f"Item '{item}' not found")
 
     # Get full item with fields
-    full_item = await client.items.get(vault.id, item.id)
+    full_item = await client.items.get(vault_name.id, item_name.id)
 
     # Return all fields as dictionary
-    return {field.label: field.value for field in full_item.fields}
+    return {field.title: field.value for field in full_item.fields}
 
 
 
