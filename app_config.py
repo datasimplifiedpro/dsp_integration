@@ -44,23 +44,13 @@ async def get_1p_secret(vault_id, item_id):
     # Return all fields as dictionary
     return {field.title: field.value for field in full_item.fields}
 
-#temporary for testing, eventually we will pull the ids from vw_integration (line 72)
-vaultid_test = "tutnr7sl57s35f7e6pmzer2tuy"
-itemid_test = "djpqkjqlrhc3bptyvtgl7v2z7m"
+vaultid_env = "VAULTID_" + environment
+itemid_env = "ITEMID_" + environment
 
-vaultid_prod = "tutnr7sl57s35f7e6pmzer2tuy"
-itemid_prod = "qxlbvydemo345ewg7xdszyth4u"
+vaultid = os.getenv(vaultid_env)
+itemid = os.getenv(itemid_env)
 
-creds_df_TEST = asyncio.run(get_1p_secret(vaultid_test, itemid_test))
-creds_df_PROD = asyncio.run(get_1p_secret(vaultid_prod, itemid_prod))
-
-creds_by_env = {
-    "TEST": creds_df_TEST,
-    "PROD": creds_df_PROD
-}
-
-# Dynamically select the credentials based on environment
-creds = creds_by_env[environment]
+creds = asyncio.run(get_1p_secret(vaultid, itemid))
 
 DB_CONFIG = {
     "host": creds.get('server'),

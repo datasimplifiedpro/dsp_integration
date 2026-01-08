@@ -2,7 +2,6 @@
 import logging
 from datetime import datetime
 import asyncio
-from onepassword.client import Client
 
 
 # my libs
@@ -23,12 +22,8 @@ print(f'Start time: {rightnow}')
 # instantiate logger class and retrieve last run parameters
 #   this logic needs to be verified against the data in the table to ensure that the last run
 #   was not a rerun of previous failed run
-logger = ETLLogger("get_api_abc_campaigns")
+logger = ETLLogger("get_all_1p")
 # last_run_params = logger.get_last_run(status='success')
-
-# print("Last parameters:", last_params)
-# print("Last parameters end date:", last_run_params['end_dt_str'])
-
 
 # Set the log level here
 logging.basicConfig(
@@ -44,7 +39,7 @@ logging.basicConfig(
 # logging.error('This is an error message')    # Will be logged
 # logging.critical('This is a critical message')# Will be logged
 
-logging.debug('Vida campaigns starting here!')
+logging.debug('1password get all secrets starting here!')
 
 # this fetches all the items and vaults with their relevant ids
 all_creds_df = asyncio.run(get_all_1p_vaults_and_items())

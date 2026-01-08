@@ -1,19 +1,6 @@
 # get_secret_utils.py
-from datetime import datetime
-
-# python libs
-import requests
-import pandas as pd
-import numpy as np
-from pandas import DataFrame
-from pymysql import Error
-from six import integer_types
-from sqlalchemy import text
-
 # my libs
 from app_config import ONEP_HEADER
-from db_utils import get_mysql_engine
-import asyncio
 from onepassword.client import Client
 
 """
