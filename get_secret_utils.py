@@ -44,7 +44,6 @@ async def get_all_1p_vaults_and_items():
     return results
 
 
-
 async def get_1p_secret(vault_id, item_id):
     # Authenticate with service account token if provided
 
@@ -60,6 +59,7 @@ async def get_1p_secret(vault_id, item_id):
 
     # Return all fields as dictionary
     return {field.title: field.value for field in full_item.fields}
+
 
 
 

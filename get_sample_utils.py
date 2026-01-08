@@ -55,17 +55,31 @@ def create_api_header():
     itemid = integration_df['item_id'].iloc[0]
 
     # This is what we will use for fetching fields from a specific vault and item
-    creds_df = asyncio.run(get_1p_secret(vaultid, itemid))
+    creds = asyncio.run(get_1p_secret(vaultid, itemid))
 
     auth = get_valid_token()
+    credential = creds.get('credential')
+    site_id = creds.get('site_id')
+
+    hdr = integration_df['header'].iloc[0]
+    print(hdr)
+
+    fhdr = hdr.format(credential=credential, site_id=site_id, auth=auth)
+    print(fhdr)
+
+    header = {item.strip() for item in fhdr.split(",")}
+    print(header)
 
     headers = {
         "Accept": "application/json",
-        "Api-Key": creds_df.get('credential'),
-        "SiteId": creds_df.get('site_id'),
+        "Api-Key": creds.get('credential'),
+        "SiteId": creds.get('site_id'),
         "authorization": auth,
         }
+    print(headers)
+
     return headers
+
 
 # Function to create the campaigns data
 def get_api_sample(url):
