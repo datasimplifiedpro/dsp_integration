@@ -7,7 +7,7 @@ import asyncio
 # my libs
 from etl_utils.decorator import log_etl_job
 from etl_utils.logger import ETLLogger
-from get_sample_utils import get_db_integration,get_api_sample
+from get_sample_utils import get_db_integration,get_api_sample,detect_column_types,create_exectute_table_sql
 from app_config import DB_CONFIG
 from db_utils import get_mysql_engine
 
@@ -62,6 +62,10 @@ def run_etl(parameters, run_id=None, start_time=None):
 
     print(len(df))
     if not df.empty:
+        column_type= detect_column_types(df)
+        table_name = "mb_clients"
+        create_exectute_table_sql(table_name, column_type)
+
         # Convert fields
         df = field_converter(
             df,

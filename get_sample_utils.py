@@ -110,6 +110,91 @@ def get_api_sample(url):
         return flattened_df
 
 
+def detect_column_types(df):
+
+    column_types = {}
+
+    for col in df.columns:
+        col_data = df[col].dropna()
+
+        # Empty column
+        if len(col_data) == 0:
+            column_types[col] = "Varchar(100)"
+            continue
+
+        dtype_str = str(df[col].dtype)
+
+        # Native pandas types
+        if 'int' in dtype_str:
+            column_types[col] = "INT"
+        elif 'float' in dtype_str:
+            column_types[col] = "DECIMAL(10,2)"
+        elif 'bool' in dtype_str:# or TINYINT
+            column_types[col] = "BOOLEAN"
+        elif 'datetime' in dtype_str:
+            column_types[col] = "DATETIME"
+        elif dtype_str == 'object':
+
+            # Sample for analysis
+            sample = col_data.head(min(15, len(col_data))).astype(str)
+
+            # Check for datetime strings
+            try:
+                pd.to_datetime(sample.head(15), errors='raise')
+                column_types[col] = "DATETIME"
+                continue
+            except:
+                pass
+
+            # Check for numeric with special chars ($, ,)
+            if sample.str.match(r'^[\$,\d\.\-\+\s]+$', na=False).mean() > 0.8:
+                column_types[col] = "DECIMAL(10,2)"
+                continue
+
+            # Check for boolean
+            if sample.str.lower().isin(['true', 'false','True', 'False','TRUE', 'FALSE', 't', 'f', 'yes', 'no', 'y', 'n', '0', '1']).mean() > 0.8:
+                column_types[col] = "BOOLEAN"
+                continue
+
+            # String - calculate VARCHAR size
+            max_len = sample.str.len().max()
+            varchar_size = int(max_len + 50)
+
+            if varchar_size > 256:
+                column_types[col] = "TEXT"
+            else:
+                column_types[col] = f"VARCHAR({min(varchar_size, 255)})"
+        else:
+            column_types[col] = "TEXT"
+
+    return column_types
+
+def create_exectute_table_sql(table_name, column_types):
+
+    column_definitions = []
+
+    # Add auto-increment primary key first
+    column_definitions.append("idnum INT AUTO_INCREMENT PRIMARY KEY")
+
+    # Add all DataFrame columns and pass primary key with its data type if we want to
+    for col_name, mysql_type in column_types.items():
+        # if col_name == primary_key:
+        #     column_definitions.append(f"`{col_name}` {mysql_type} PRIMARY KEY")
+        # else:
+        column_definitions.append(f"`{col_name}` {mysql_type}")
+
+    create_sql = f"""
+        CREATE TABLE IF NOT EXISTS `{table_name}` (
+            {', '.join(column_definitions)}
+        )
+        """
+    with engine.begin() as conn:
+        conn.execute(text(create_sql))
+
+    print(f"✓ Table '{table_name}' created successfully")
+
+
+
 # You can pass only the parameters you need
 def field_converter(df, cols_to_num=None, cols_to_date=None,
                     cols_to_datetime=None, cols_to_bool=None):
