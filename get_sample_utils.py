@@ -40,12 +40,23 @@ Updates:
 
 
 
-def get_db_integration():
+def get_db_integration(id):
     try:
-        df = pd.read_sql("select * from vw_integration", con=engine)
+        df = pd.read_sql(f"select * from vw_integration where integration_id = {id}", con=engine)
     except Error as e:
         print("Error reading vw_integration:", e)
     return df
+
+
+def get_db_integration_columns(clientid, integrationid):
+    try:
+        df = pd.read_sql(f"select api_column_name from_name, column_name to_name from integration_columns where integration_id = 2 and client_id = (select max(ifnull(client_id = {clientid},0))*{clientid} from integration_columns) order by ordinal_position", con=engine)
+        rename_dict = df.set_index('from_name')['to_name'].to_dict()
+    except Error as e:
+        print("Error reading vw_integration:", e)
+    return rename_dict
+
+
 
 def create_api_header():
     # list of Club IDs to substitute into the API URL

@@ -21,6 +21,15 @@ ONEP_HEADER = {
     "integration_version": os.getenv('1P_INT_VERSION')
 }
 
+
+# Headers for the request
+ABC_API_HEADER = {
+    "Accept": "application/json;charset=UTF-8",
+    "app_id": os.getenv("ABC_APP_ID"),
+    "app_key": os.getenv("ABC_APP_KEY")
+}
+
+
 # initialize vars
 jobname = '' # if not blank, fetch jobseq using jobname
 sqlseq = -1  # if eq -1 then exectute all items in jobseq in order, if not eq -1 then only execute this sqlseq for the jobseq
@@ -91,18 +100,6 @@ DB_CONFIG = {
 
 
 
-# Zenoti keys for the request
-ZENOTI_API_KEYS = {
-    "USA": os.getenv("ZENOTI_API_KEY"),
-    "Canada": os.getenv("ZENOTI_API_KEY_CAN")
-}
-
-
-# HubSpot header for the request
-HUBSPOT_API_HEADER = {
-    "Authorization": f"Bearer {os.getenv('HUBSPOT_API_KEY')}",
-    "Content-Type": "application/json"
-}
 
 
 print("name:", __name__)
