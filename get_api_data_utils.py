@@ -631,7 +631,7 @@ def convert_columns(df, clnid, intgid):
 def upsert_data(clientid, integrationid, integrationname):
     upsert_sql = get_upsert_sql(clientid, integrationid, integrationname)
     with engine.begin() as conn:
-        conn.execute( (upsert_sql))
+        conn.execute( (text(upsert_sql)))
 
     return
 
