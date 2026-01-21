@@ -6,7 +6,7 @@ from datetime import datetime
 from etl_utils.decorator import log_etl_job
 # from etl_utils.logger import ETLLogger
 from get_sample_utils import get_db_integration,get_api_sample
-from get_api_data_utils import get_db_abc_clubs, get_api, convert_columns
+from get_api_data_utils import get_db_data, get_api, convert_columns
 from get_api_data_utils import upsert_data, rename_columns
 from app_config import DB_CONFIG
 from db_utils import get_mysql_engine, clear_staging_table
@@ -27,9 +27,12 @@ integration_id = integration_df['integration_id'].iloc[0]
 integration_name = integration_df['integration_name'].iloc[0]
 client_id = integration_df['client_id'].iloc[0]
 client_name = integration_df['client_name'].iloc[0]
-base_url = integration_df['base_url'].iloc[0]
+base_url_template = integration_df['base_url'].iloc[0]
 data_node_name = integration_df['data_node_name'].iloc[0]
-
+integration_pattern = integration_df['integration_pattern'].iloc[0]
+pattern_table = integration_df['pattern_table'].iloc[0]
+pattern_return_column = integration_df['pattern_return_column'].iloc[0]
+pattern_where = integration_df['pattern_where'].iloc[0]
 
 # Set the log level here
 logging.basicConfig(
@@ -42,18 +45,20 @@ logging.debug(f'{integration_name} for {client_name} starting here!')
 
 
 # list of Club IDs to substitute into the API URL
-club_df = get_db_abc_clubs()
+loop_df = get_db_data(pattern_return_column, pattern_table, pattern_where)
 
 # Step through each club's active member
-for row in club_df.itertuples():
-    club = row.clubid    # Initialize
-    # base_url = f"https://api.abcfinancial.com/rest/{club}/clubs/items/categories"
+for row in loop_df.itertuples(index=False):
+    
+    
+    row_dict = row._asdict()
+    loop_column = row_dict['loop_column']
+    base_url = base_url_template.format(**row_dict)
 
     # Initialize the first page
     page = 1
     size = 1000  # Number of items per page
     total_items = 0
-    print(f"club: {club}")
 
     while True:
 
@@ -72,7 +77,7 @@ for row in club_df.itertuples():
         def run_etl(parameters, run_id=None, start_time=None):
             global next_page
             df, next_page = get_api(url, data_node_name)
-            df["club"] = club
+            df[pattern_return_column] = loop_column
             df["etlrunid"] = run_id
             # df["etl_start_time"] = start_time
             print(len(df))
@@ -89,7 +94,7 @@ for row in club_df.itertuples():
 
         # If no nextPage is provided, stop the loop
         if (not next_page) or (next_page == '0'):
-            print(f"No more pages available for ID {club}, stopping.")
+            print(f"No more pages available for ID {loop_column}, stopping.")
             break
 
         # Move to the next page

@@ -84,7 +84,7 @@ def get_db_update_columns(clientid, integrationid):
 def get_upsert_sql(clientid, integrationid, integrationname):
     insert_list = get_db_insert_columns(clientid, integrationid)
     update_list = get_db_update_columns(clientid, integrationid)
-    sql_str = f'INSERT INTO {integrationname} (' + insert_list + ') select ' + insert_list + f' FROM {integrationname} v ON DUPLICATE KEY UPDATE ' + update_list + ';'
+    sql_str = f'INSERT INTO {integrationname} (' + insert_list + ') select ' + insert_list + f' FROM ul_staging.{integrationname} v ON DUPLICATE KEY UPDATE ' + update_list + ';'
     return sql_str
 
 
@@ -93,11 +93,11 @@ def get_upsert_sql(clientid, integrationid, integrationname):
 
 
 
-def get_db_abc_clubs():
+def get_db_data(clmn, tbl, whr):
     try:
-        df = pd.read_sql("select id, club as clubid, name from abc_clubs where active = 1", con=engine)
+        df = pd.read_sql(f"select {clmn} loop_column from {tbl} {whr};", con=engine)
     except Error as e:
-        print("Error reading abc club data:", e)
+        print("Error reading db data:", e)
     return df
 
 
