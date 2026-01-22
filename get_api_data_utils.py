@@ -13,7 +13,6 @@ from sqlalchemy import text
 # my libs
 from app_config import ABC_API_HEADER, DB_CONFIG
 from db_utils import get_mysql_engine
-from get_sample_utils import get_db_integration_columns
 
 
 # create engine
@@ -1307,3 +1306,38 @@ def upsert_campaigns():
         conn.execute(text(upsert_sql))
 
     return
+
+def get_db_integration_columns(clientid, integrationid):
+    try:
+        df = pd.read_sql(f"select api_column_name from_name, column_name to_name from integration_columns where integration_id = {integrationid} and client_id = (select max(ifnull(client_id = {clientid},0))*{clientid} from integration_columns) order by ordinal_position", con=engine)
+        rename_dict = df.set_index('from_name')['to_name'].to_dict()
+    except Error as e:
+        print("Error reading vw_integration:", e)
+    return rename_dict
+
+def get_db_expected_columns(clientid, integrationid):
+    try:
+        df = pd.read_sql(f"select column_name expected_column_name from integration_columns where integration_id = {integrationid} and client_id = (select max(ifnull(client_id = {clientid},0))*{clientid} from integration_columns) order by ordinal_position", con=engine)
+        expected_data_columns = df['expected_column_name'].tolist()
+    except Error as e:
+        print("Error reading vw_integration:", e)
+    return expected_data_columns
+
+# audit columns
+def audit_df_columns(df, expected_data_columns):
+    missing = [col for col in expected_data_columns if col not in df.columns]
+    extra = [col for col in df.columns if col not in expected_data_columns]
+    return missing, extra
+
+# normalize columns
+def normalize_df_columns(df, expected_data_columns, missing):
+    # first add any missing columns
+    for col in missing:
+        if col not in df.columns:
+            # print(col)
+            df[col] = None
+    # column_list = df.columns.values.tolist()
+    # print(column_list)
+    # second remove extra columns
+    df = df[expected_data_columns]  # Only keep the expected ones
+    return df

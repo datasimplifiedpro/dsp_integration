@@ -7,7 +7,7 @@ from etl_utils.decorator import log_etl_job
 # from etl_utils.logger import ETLLogger
 from get_sample_utils import get_db_integration,get_api_sample
 from get_api_data_utils import get_db_data, get_api, convert_columns
-from get_api_data_utils import upsert_data, rename_columns
+from get_api_data_utils import upsert_data, rename_columns, get_db_expected_columns, audit_df_columns, normalize_df_columns
 from app_config import DB_CONFIG
 from db_utils import get_mysql_engine, clear_staging_table
 
@@ -33,6 +33,7 @@ integration_pattern = integration_df['integration_pattern'].iloc[0]
 pattern_table = integration_df['pattern_table'].iloc[0]
 pattern_return_column = integration_df['pattern_return_column'].iloc[0]
 pattern_where = integration_df['pattern_where'].iloc[0]
+pattern_size = integration_df['pattern_size'].iloc[0]
 
 # Set the log level here
 logging.basicConfig(
@@ -57,7 +58,7 @@ for row in loop_df.itertuples(index=False):
 
     # Initialize the first page
     page = 1
-    size = 1000  # Number of items per page
+    size = pattern_size  # Number of items per page
     total_items = 0
 
     while True:
@@ -77,13 +78,25 @@ for row in loop_df.itertuples(index=False):
         def run_etl(parameters, run_id=None, start_time=None):
             global next_page
             df, next_page = get_api(url, data_node_name)
-            df[pattern_return_column] = loop_column
-            df["etlrunid"] = run_id
             # df["etl_start_time"] = start_time
             print(len(df))
             if not df.empty:
+                # Add necessary columns
+                df[pattern_return_column] = loop_column
+                df["etlrunid"] = run_id
+
                 df = rename_columns(df, client_id, integration_id)
+                expected_columns = get_db_expected_columns(client_id, integration_id)
+                missing, extra = audit_df_columns(df, expected_columns)
+                if missing:
+                    logging.debug(f'missing: {missing}')
+                    print(f'missing: {missing}')
+                if extra:
+                    logging.debug(f'extra: {extra}')
+                    print(f'extra: {extra}')
+                df = normalize_df_columns(df, expected_columns, missing)
                 df = convert_columns(df, client_id, integration_id)
+
                 clear_staging_table(integration_name)
                 df.to_sql(integration_name, schema="ul_staging", con=engine, index=False, if_exists="append")
                 upsert_data(client_id, integration_id, integration_name)
