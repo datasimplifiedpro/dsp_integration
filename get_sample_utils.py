@@ -40,9 +40,9 @@ Updates:
 
 
 
-def get_db_integration():
+def get_db_integration(id):
     try:
-        df = pd.read_sql("select * from vw_integration", con=engine)
+        df = pd.read_sql(f"select * from vw_integration where integration_id = {id}", con=engine)
     except Error as e:
         print("Error reading vw_integration:", e)
     return df

@@ -1,18 +1,9 @@
 # db_utils.py
 
-# test Update to sqlalchemy
-# this will get rid of UserWarning: pandas only supports SQLAlchemy connectable (engine/connection) or database string URI or sqlite3 DBAPI2 connection. Other DBAPI2 objects are not tested. Please consider using SQLAlchemy.
-# https://mariadb.com/resources/blog/using-sqlalchemy-with-mariadb-connector-python-part-1/
-# https://www.slingacademy.com/article/sqlalchemy-how-to-connect-to-mysql-database/
-# To turn off warnings:
-# import warnings
-# warnings.simplefilter(action='ignore', category=UserWarning)
-
-import warnings
 import mysql.connector
 from mysql.connector import Error
-# import mariadb ## simply using mysql to connect to mariadb
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
+from app_config import DB_CONFIG
 
 def get_mysql_engine(host, port, database, user, password):
     try:
@@ -40,3 +31,19 @@ def get_mysql_connection(host, port, database, user, password, allow_public_key=
     except Error as e:
         print("Error connecting to MySQL:", e)
         return None
+
+# Generic Utilities
+
+# create engine
+#   Use run config to pick the right configuration
+engine = get_mysql_engine(**DB_CONFIG)
+
+# clear staging table
+def clear_staging_table(table_name: str):
+    # Empty staging table
+    truncate_sql = f"""truncate ul_staging.{table_name};"""
+
+    with engine.begin() as conn:
+        conn.execute(text(truncate_sql))
+
+    return None
