@@ -47,23 +47,44 @@ logging.debug('Get API sample starting here!')
 
 
 # list of Club IDs to substitute into the API URL
-integration_df = get_db_integration()
+integration_id = 3
+integration_df = get_db_integration(integration_id)
 
-url = integration_df['base_url'].iloc[0]
+# use this instead of one by one adding
+# col_vars = df.to_dict(orient="series")
+# col_vars["age"]
+# col_vars["salary"]
+
+application_name = integration_df['application_name'].iloc[0]
+integration_name = integration_df['integration_name'].iloc[0]
+app_header = integration_df['header'].iloc[0]
+client_id = integration_df['client_id'].iloc[0]
+client_name = integration_df['client_name'].iloc[0]
+base_url_template = integration_df['base_url'].iloc[0]
+data_node_name = integration_df['data_node_name'].iloc[0]
+integration_pattern = integration_df['integration_pattern'].iloc[0]
+pattern_table = integration_df['pattern_table'].iloc[0]
+pattern_return_column = integration_df['pattern_return_column'].iloc[0]
+pattern_where = integration_df['pattern_where'].iloc[0]
+pattern_size = integration_df['pattern_size'].iloc[0]
+vaultid = integration_df['vault_id'].iloc[0]
+itemid = integration_df['item_id'].iloc[0]
+
+url = base_url_template
 
 params = {
             "url": url
         }
 
-@log_etl_job("get_api_sample")
+@log_etl_job(f"get_api_sample-{integration_id}")
 def run_etl(parameters, run_id=None, start_time=None):
-    df= get_api_sample(url)
+    df= get_api_sample(url, app_header, data_node_name)
     df["etlrunid"] = run_id
 
     print(len(df))
     if not df.empty:
         column_type= detect_column_types(df)
-        table_name = "mb_clients"
+        table_name = integration_name
         create_exectute_table_sql(table_name, column_type)
 
         # Convert fields

@@ -11,6 +11,7 @@ from six import integer_types
 from sqlalchemy import text
 from get_secret_utils import get_1p_secret
 from token_generator import get_valid_token
+import json
 
 
 # my libs
@@ -47,12 +48,8 @@ def get_db_integration(id):
         print("Error reading vw_integration:", e)
     return df
 
-def create_api_header():
+def create_api_header(vaultid, itemid):
     # list of Club IDs to substitute into the API URL
-    integration_df = get_db_integration()
-
-    vaultid = integration_df['vault_id'].iloc[0]
-    itemid = integration_df['item_id'].iloc[0]
 
     # This is what we will use for fetching fields from a specific vault and item
     creds = asyncio.run(get_1p_secret(vaultid, itemid))
@@ -82,10 +79,13 @@ def create_api_header():
 
 
 # Function to create the campaigns data
-def get_api_sample(url):
+def get_api_sample(url, header, node_name):
 
-    headers = create_api_header()
+    # headers = create_api_header()
     # Make the request
+
+    headers = json.loads(header)
+
     response = requests.get(url, headers=headers)
     resp_data = response.content.replace(b'\xc3\xa2\xc2\x80\xc2\x99', b'''''')
 
@@ -97,7 +97,7 @@ def get_api_sample(url):
         # Parse the JSON response
         data = response.json()
 
-        flattened_df = pd.json_normalize(data['Clients'])
+        flattened_df = pd.json_normalize(data[node_name].values())
         # print(flattened_df)
 
         # Check list of dataframe columns

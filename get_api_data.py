@@ -28,12 +28,14 @@ integration_name = integration_df['integration_name'].iloc[0]
 client_id = integration_df['client_id'].iloc[0]
 client_name = integration_df['client_name'].iloc[0]
 base_url_template = integration_df['base_url'].iloc[0]
-data_node_name = integration_df['data_node_name'].iloc[0]
+data_node_name = integration_df['data_node_name'].iloc[0]  # where to pull data from response data json
 integration_pattern = integration_df['integration_pattern'].iloc[0]
 pattern_table = integration_df['pattern_table'].iloc[0]
 pattern_return_column = integration_df['pattern_return_column'].iloc[0]
 pattern_where = integration_df['pattern_where'].iloc[0]
 pattern_size = integration_df['pattern_size'].iloc[0]
+vaultid = integration_df['vault_id'].iloc[0]
+itemid = integration_df['item_id'].iloc[0]
 
 # Set the log level here
 logging.basicConfig(
