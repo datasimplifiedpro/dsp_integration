@@ -12,7 +12,7 @@ from sqlalchemy import text
 from get_secret_utils import get_1p_secret
 from token_generator import get_valid_token
 import json
-
+from fnmatch import fnmatch
 
 # my libs
 from app_config import DB_CONFIG, ONEP_HEADER
@@ -48,48 +48,33 @@ def get_db_integration(id):
         print("Error reading vw_integration:", e)
     return df
 
-def create_api_header(vaultid, itemid):
-    # list of Club IDs to substitute into the API URL
+def create_api_header(header_template, vaultid, itemid):
 
     # This is what we will use for fetching fields from a specific vault and item
     creds = asyncio.run(get_1p_secret(vaultid, itemid))
 
     auth = get_valid_token()
-    # credential = creds.get('credential')
-    # site_id = creds.get('site_id')
-    #
-    # hdr = integration_df['header'].iloc[0]
-    # print(hdr)
-    #
-    # fhdr = hdr.format(credential=credential, site_id=site_id, auth=auth)
-    # print(fhdr)
-    #
-    # header = {item.strip() for item in fhdr.split(",")}
-    # print(header)
+    credential = creds.get('credential')
+    site_id = creds.get('site_id')
+
+    header_json = json.loads(header_template)
 
     headers = {
-        "Accept": "application/json",
-        "Api-Key": creds.get('credential'),
-        "SiteId": creds.get('site_id'),
-        "authorization": auth,
-        }
-    print(headers)
+        k: v.format(credential=credential, site_id=site_id, auth=auth)
+        for k, v in header_json.items()
+    }
 
+    print(headers)
     return headers
 
 
-# Function to create the campaigns data
+
 def get_api_sample(url, header, node_name):
 
-    # headers = create_api_header()
-    # Make the request
-
-    headers = json.loads(header)
-
-    response = requests.get(url, headers=headers)
+    response = requests.get(url, headers=header)
     resp_data = response.content.replace(b'\xc3\xa2\xc2\x80\xc2\x99', b'''''')
 
-    flattened_df: DataFrame
+    flattened_df= pd.DataFrame()
     next_page: str = '0'
 
     # if the request was successful, parse and save to df
@@ -97,7 +82,9 @@ def get_api_sample(url, header, node_name):
         # Parse the JSON response
         data = response.json()
 
-        flattened_df = pd.json_normalize(data[node_name].values())
+        # node_name = str(node_name).strip()
+
+        flattened_df = pd.json_normalize(data[node_name])
         # print(flattened_df)
 
         # Check list of dataframe columns
@@ -116,54 +103,87 @@ def detect_column_types(df):
 
     for col in df.columns:
         col_data = df[col].dropna()
+        name = str(col).lower()
 
         # Empty column
         if len(col_data) == 0:
             column_types[col] = "Varchar(100)"
             continue
 
+        # Keyword overrides (SQL LIKE '%keyword%')
+        if fnmatch(name, "*id*"):
+            column_types[col] = "VARCHAR(100)"
+            continue
+
+        if fnmatch(name, "*phone*"):
+            column_types[col] = "VARCHAR(50)"
+            continue
+
+        if fnmatch(name, "*email*"):
+            column_types[col] = "VARCHAR(255)"
+            continue
+
+        if fnmatch(name, "*url*"):
+            column_types[col] = "VARCHAR(2048)"
+            continue
+
+        if fnmatch(name, "*zip*") or fnmatch(name, "*postal*"):
+            column_types[col] = "VARCHAR(20)"
+            continue
+
         dtype_str = str(df[col].dtype)
 
-        # Native pandas types
+        # Sample data for checks
+        sample_size = min(1000, len(col_data))
+        sample = col_data.sample(n=sample_size, random_state=42) if len(col_data) > sample_size else col_data
+
         if 'int' in dtype_str:
-            column_types[col] = "INT"
+            max_val = sample.abs().max()
+            column_types[col] = "VARCHAR(100)" if max_val > 2147483647 else "INT"
+
         elif 'float' in dtype_str:
-            column_types[col] = "DECIMAL(10,2)"
-        elif 'bool' in dtype_str:# or TINYINT
+            nums = pd.to_numeric(sample, errors="coerce").dropna()
+            if not nums.empty:
+                max_abs = float(nums.abs().max())
+                column_types[col] = "VARCHAR(100)" if max_abs > 99999999.99 else "DECIMAL(10,2)"
+            else:
+                column_types[col] = "DECIMAL(10,2)"
+
+        elif 'bool' in dtype_str:
             column_types[col] = "BOOLEAN"
+
         elif 'datetime' in dtype_str:
-            column_types[col] = "DATETIME"
+            column_types[col] = "DATE" if (sample == sample.dt.normalize()).all() else "DATETIME"
+
         elif dtype_str == 'object':
+            sample_str = sample.astype(str)
 
-            # Sample for analysis
-            sample = col_data.head(min(15, len(col_data))).astype(str)
-
-            # Check for datetime strings
+            # Try datetime
             try:
-                pd.to_datetime(sample.head(15), errors='raise')
-                column_types[col] = "DATETIME"
+                parsed = pd.to_datetime(sample_str.head(100), errors='raise', utc=True)
+                column_types[col] = "DATE" if (parsed == parsed.dt.normalize()).all() else "DATETIME"
                 continue
             except:
                 pass
 
-            # Check for numeric with special chars ($, ,)
-            if sample.str.match(r'^[\$,\d\.\-\+\s]+$', na=False).mean() > 0.8:
-                column_types[col] = "DECIMAL(10,2)"
+            # Try numeric with special chars
+            if sample_str.str.match(r'^[\$,\d\.\-\+\s]+$', na=False).mean() > 0.8:
+                cleaned = sample_str.str.replace(r'[\$,\s]', '', regex=True)
+                nums = pd.to_numeric(cleaned, errors='coerce').dropna()
+                column_types[col] = "VARCHAR(100)" if (
+                            not nums.empty and nums.abs().max() > 99999999.99) else "DECIMAL(10,2)"
                 continue
 
-            # Check for boolean
-            if sample.str.lower().isin(['true', 'false','True', 'False','TRUE', 'FALSE', 't', 'f', 'yes', 'no', 'y', 'n', '0', '1']).mean() > 0.8:
+            # Try boolean
+            if sample_str.str.lower().isin(['true', 'false', 't', 'f', 'yes', 'no', 'y', 'n', '0', '1']).mean() > 0.9:
                 column_types[col] = "BOOLEAN"
                 continue
 
-            # String - calculate VARCHAR size
-            max_len = sample.str.len().max()
+            # String - VARCHAR or TEXT
+            max_len = sample_str.str.len().max()
             varchar_size = int(max_len + 50)
+            column_types[col] = "TEXT" if varchar_size > 255 else f"VARCHAR({min(varchar_size, 255)})"
 
-            if varchar_size > 256:
-                column_types[col] = "TEXT"
-            else:
-                column_types[col] = f"VARCHAR({min(varchar_size, 255)})"
         else:
             column_types[col] = "TEXT"
 
@@ -183,17 +203,33 @@ def create_exectute_table_sql(table_name, column_types):
         # else:
         column_definitions.append(f"`{col_name}` {mysql_type}")
 
-    create_sql = f"""
+    create_sql_main = f"""
         CREATE TABLE IF NOT EXISTS `{table_name}` (
             {', '.join(column_definitions)}
         )
         """
-    with engine.begin() as conn:
-        conn.execute(text(create_sql))
+    create_sql_staging = f"""
+             CREATE TABLE IF NOT EXISTS `staging_{table_name}` (
+                {', '.join(column_definitions)}
+            )
+            """
 
+    with engine.begin() as conn:
+        conn.execute(text(create_sql_main))
+        conn.execute(text(create_sql_staging))
     print(f"✓ Table '{table_name}' created successfully")
 
 
+def get_db_tabel_metadata(table_name, db_name):
+
+    try:
+        df = pd.read_sql(f"""select table_name, column_name, ordinal_position, column_default, is_nullable, column_type, column_key, extra  
+                         from information_schema.columns 
+                         where table_name = '{table_name}' and table_schema = '{db_name}'
+                         order by ordinal_position""", con=engine)
+    except Error as e:
+        print(f"Error extracting the metadata for table {table_name}", e)
+    return df
 
 # You can pass only the parameters you need
 def field_converter(df, cols_to_num=None, cols_to_date=None,
@@ -241,47 +277,125 @@ def field_converter(df, cols_to_num=None, cols_to_date=None,
         print('unexpected_values')
         print(unexpected_values)
 
+        #    N E S T E D   J S O N   F I X   (dict/list -> JSON string)   #
+    bad_cols = [
+        c for c in df.columns
+        if df[c].apply(lambda v: isinstance(v, (dict, list))).any()
+    ]
+
+    if bad_cols:
+        for c in bad_cols:
+            df[c] = df[c].apply(
+                lambda v: json.dumps(v, ensure_ascii=False) if isinstance(v, (dict, list)) else v
+            )
+
     df = df.replace({np.nan: None, pd.NaT: None})
 
     return df
 
+# clear staging
+def clear_staging_meta(db_name):
+    # Empty staging table
+    truncate_sql = f"""truncate {db_name}.staging_integration_columns;"""
+    with engine.begin() as conn:
+        conn.execute(text(truncate_sql))
 
-# rename columns
-def rename_campaigns_columns(df):
-    # rename columns, remove personal and shorten to be valid db column name
-    df.rename(columns={'isActive': 'active',
-                       'id': 'campaignid',
-                       'name': 'campaignname'}, inplace=True)
-    return df
+    return
 
 
-# # clear staging campaigns
-# def clear_staging_campaigns():
-#     # Empty staging table
-#     truncate_sql = """truncate staging.abc_campaigns;"""
-#     with engine.begin() as conn:
-#         conn.execute(text(truncate_sql))
-#
-#     return
-
-# Upsert campaigns
-def upsert_campaigns():
+# Upsert
+def upsert_metadata():
     # update the items data from staging
     # Perform UPSERT into target table
-    # updat the rows and columns
+    # update the rows and columns
     upsert_sql = """
-                 INSERT INTO abc_campaigns (etlrunid, clubid, active, campaignid, campaignname, type)
-                 SELECT etlrunid, clubid, active, campaignid, campaignname, type \
-                 FROM staging.abc_campaigns c ON DUPLICATE KEY \
-                 UPDATE \
-                     etlrunid = c.etlrunid, \
-                     active = c.active, \
-                     campaignname = c.campaignname, \
-                     type = c.type; \
-
+                 INSERT INTO integration_columns (integration_id, api_column_name, ordinal_position, column_default, is_nullable, column_type, column_key, extra )
+                 SELECT integration_id, column_name as api_column_name, ordinal_position, column_default, is_nullable, column_type, column_key, extra 
+                 FROM api_metadata.staging_integration_columns i ON DUPLICATE KEY 
+                 UPDATE 
+                     integration_id = i.integration_id,
+                     api_column_name = i.api_column_name,
+                     ordinal_position = i.ordinal_position,
+                     column_default = i.column_default,
+                     is_nullable = i.is_nullable,
+                     column_type = i.column_type,
+                     column_key = i.column_key,
+                     extra = i.extra; 
                  """
 
     with engine.begin() as conn:
         conn.execute(text(upsert_sql))
+
+    return
+
+def get_df_column_types_sample(clientid, integrationid):
+    try:
+        df = pd.read_sql(f"select api_column_name, column_type from integration_columns where client_id = (select max(ifnull(client_id = {clientid},0))*{clientid} from integration_columns) and integration_id = {integrationid} and column_type not like 'varchar%%' and column_type <> 'text' order by column_type ", con=engine)
+    except Error as e:
+        print("Error reading abc club data:", e)
+    return df
+
+def get_db_insert_columns_sample(clientid, integrationid):
+    try:
+        df = pd.read_sql(f"select api_column_name from integration_columns where active and integration_id = {integrationid} and client_id = (select max(ifnull(client_id = {clientid},0))*{clientid} from integration_columns) order by ordinal_position", con=engine)
+        result = ",".join(df['api_column_name'].astype(str))
+    except Error as e:
+        print("Error reading vw_integration:", e)
+    return result
+
+def get_db_update_columns_sample(clientid, integrationid):
+    try:
+        df = pd.read_sql(f"select api_column_name || ' = v.' || api_column_name as column_name from integration_columns where active and column_key <> 'PRI' and integration_id = {integrationid} and client_id = (select max(ifnull(client_id = {clientid},0))*{clientid} from integration_columns) order by ordinal_position", con=engine)
+        result = ",".join(df['api_column_name'].astype(str))
+    except Error as e:
+        print("Error reading vw_integration:", e)
+    return result
+
+def get_upsert_sql_sample(clientid, integrationid, integrationname, db_name):
+    insert_list = get_db_insert_columns_sample(clientid, integrationid)
+    update_list = get_db_update_columns_sample(clientid, integrationid)
+    sql_str = f'INSERT INTO {integrationname} (' + insert_list + ') select ' + insert_list + f' FROM {db_name}.{integrationname} v ON DUPLICATE KEY UPDATE ' + update_list + ';'
+    return sql_str
+
+# rename columns
+def convert_columns_sample(df, clnid, intgid):
+
+
+    convert_columns = get_df_column_types_sample(clnid, intgid)
+    df = df.drop(columns=['idnum'], errors='ignore')
+
+    filtered = convert_columns[(convert_columns['column_type'].isin(['int', 'decimal(10,2)', 'mediumint unsigned', 'int unsigned'])) & (convert_columns['api_column_name'] != 'idnum')]
+    num_cols = filtered['api_column_name'].tolist()
+
+    filtered = convert_columns[convert_columns['column_type'] == 'date']
+    date_cols = filtered['api_column_name'].tolist()
+
+    filtered = convert_columns[convert_columns['column_type'] == 'datetime']
+    datetime_cols = filtered['api_column_name'].tolist()
+
+    filtered = convert_columns[convert_columns['column_type']  == 'tinyint(1)']
+    bool_cols = filtered['api_column_name'].tolist()
+
+    df = field_converter(df, num_cols, date_cols, datetime_cols, bool_cols)
+
+    return df
+
+
+# clear staging items
+def clear_staging_table(db_name, integration_name):
+    # call before loading new rows, keep for troubleshooting
+    truncate_sql = f"""truncate {db_name}.staging_{integration_name};"""
+
+    with engine.begin() as conn:
+        conn.execute(text(truncate_sql))
+
+    return
+
+
+# Upsert item categories
+def upsert_data_sample(clientid, integrationid, integrationname, db_name):
+    upsert_sql = get_upsert_sql_sample(clientid, integrationid, integrationname, db_name)
+    with engine.begin() as conn:
+        conn.execute( (text(upsert_sql)))
 
     return

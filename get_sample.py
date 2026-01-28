@@ -1,13 +1,16 @@
 # python libs
 import logging
 from datetime import datetime
+
+import json
 import asyncio
 
 
 # my libs
 from etl_utils.decorator import log_etl_job
 from etl_utils.logger import ETLLogger
-from get_sample_utils import get_db_integration,get_api_sample,detect_column_types,create_exectute_table_sql
+from get_sample_utils import (get_db_integration,get_api_sample,detect_column_types,create_exectute_table_sql,get_db_tabel_metadata,
+                              clear_staging_meta,upsert_metadata,field_converter, create_api_header, upsert_data_sample, convert_columns_sample, clear_staging_table)
 from app_config import DB_CONFIG
 from db_utils import get_mysql_engine
 
@@ -46,18 +49,13 @@ logging.basicConfig(
 logging.debug('Get API sample starting here!')
 
 
-# list of Club IDs to substitute into the API URL
-integration_id = 3
-integration_df = get_db_integration(integration_id)
-
-# use this instead of one by one adding
-# col_vars = df.to_dict(orient="series")
-# col_vars["age"]
-# col_vars["salary"]
+integration_df = get_db_integration(1)
 
 application_name = integration_df['application_name'].iloc[0]
+integration_id = integration_df['integration_id'].iloc[0]
 integration_name = integration_df['integration_name'].iloc[0]
-app_header = integration_df['header'].iloc[0]
+table_name = 'smpl_' + integration_df['table_name'].iloc[0]
+app_header_template = integration_df['header'].iloc[0]
 client_id = integration_df['client_id'].iloc[0]
 client_name = integration_df['client_name'].iloc[0]
 base_url_template = integration_df['base_url'].iloc[0]
@@ -72,13 +70,18 @@ itemid = integration_df['item_id'].iloc[0]
 
 url = base_url_template
 
+headers = create_api_header(app_header_template, vaultid, itemid)
+
+db_name = 'api_metadata'
+
 params = {
             "url": url
         }
 
-@log_etl_job(f"get_api_sample-{integration_id}")
+@log_etl_job(f"get_api_sample {application_name}-{integration_name}")
 def run_etl(parameters, run_id=None, start_time=None):
-    df= get_api_sample(url, app_header, data_node_name)
+
+    df= get_api_sample(url, headers, data_node_name)
     df["etlrunid"] = run_id
 
     print(len(df))
@@ -87,19 +90,32 @@ def run_etl(parameters, run_id=None, start_time=None):
         table_name = integration_name
         create_exectute_table_sql(table_name, column_type)
 
+        meta_df = get_db_tabel_metadata(table_name, db_name)
+        meta_df["integration_id"] = integration_id
+
         # Convert fields
-        df = field_converter(
-            df,
+        meta_df = field_converter(
+            meta_df,
             # cols_to_num=[],
             # cols_to_date=[],
             # cols_to_datetime=[],
-            cols_to_bool=['isActive']
+            cols_to_bool=['IS_NULLABLE']
         )
-        df = rename_campaigns_columns(df)
-        clear_staging_table("abc_campaigns")
-        df.to_sql("abc_campaigns", schema="staging", con=engine, index=False, if_exists="append")
-        upsert_campaigns()
-    return {"record_count": len(df)}
 
+        clear_staging_meta(db_name)
+
+        meta_df.to_sql("staging_integration_columns", schema=db_name, con=engine, index=False, if_exists="append")
+        # upsert_metadata()
+
+        df = convert_columns_sample(df, client_id, integration_id)
+
+        staging_table =f"staging_{integration_name}"
+
+        clear_staging_table(db_name, integration_name)
+
+        df.to_sql(staging_table, schema=db_name, con=engine, index=False, if_exists="append")
+        upsert_data_sample(client_id, integration_id, integration_name, db_name)
+
+    return {"record_count": len(df)}
 
 run_etl(parameters=params)
