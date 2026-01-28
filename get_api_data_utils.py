@@ -9,6 +9,7 @@ from pandas import DataFrame
 from pymysql import Error
 from six import integer_types
 from sqlalchemy import text
+import json
 
 # my libs
 from app_config import ABC_API_HEADER, DB_CONFIG
@@ -64,16 +65,15 @@ def get_df_column_types(clientid, integrationid):
 
 def get_db_insert_columns(clientid, integrationid):
     try:
-        df = pd.read_sql(f"select column_name from integration_columns where active and integration_id = 2 and client_id = (select max(ifnull(client_id = {clientid},0))*{clientid} from integration_columns) order by ordinal_position", con=engine)
+        df = pd.read_sql(f"select column_name from integration_columns where active and integration_id = {integrationid} and client_id = (select max(ifnull(client_id = {clientid},0))*{clientid} from integration_columns) order by ordinal_position", con=engine)
         result = ",".join(df['column_name'].astype(str))
     except Error as e:
         print("Error reading vw_integration:", e)
     return result
 
-
 def get_db_update_columns(clientid, integrationid):
     try:
-        df = pd.read_sql(f"select column_name || ' = v.' || column_name as column_name from integration_columns where active and column_key <> 'PRI' and integration_id = 2 and client_id = (select max(ifnull(client_id = {clientid},0))*{clientid} from integration_columns) order by ordinal_position", con=engine)
+        df = pd.read_sql(f"select column_name || ' = v.' || column_name as column_name from integration_columns where active and column_key <> 'PRI' and integration_id = {integrationid} and client_id = (select max(ifnull(client_id = {clientid},0))*{clientid} from integration_columns) order by ordinal_position", con=engine)
         result = ",".join(df['column_name'].astype(str))
     except Error as e:
         print("Error reading vw_integration:", e)
@@ -85,11 +85,6 @@ def get_upsert_sql(clientid, integrationid, integrationname):
     update_list = get_db_update_columns(clientid, integrationid)
     sql_str = f'INSERT INTO {integrationname} (' + insert_list + ') select ' + insert_list + f' FROM ul_staging.{integrationname} v ON DUPLICATE KEY UPDATE ' + update_list + ';'
     return sql_str
-
-
-
-
-
 
 
 def get_db_data(clmn, tbl, whr):
@@ -684,15 +679,6 @@ def field_converter(df, cols_to_num=None, cols_to_date=None,
     df = df.replace({np.nan: None, pd.NaT: None})
 
     return df
-
-
-
-
-
-
-
-
-
 
 
 
