@@ -5,9 +5,8 @@ from datetime import datetime
 # my libs
 from etl_utils.decorator import log_etl_job
 # from etl_utils.logger import ETLLogger
-from get_sample_utils import get_db_integration,get_api_sample
-from get_api_data_utils import get_db_data, get_api, convert_columns
-from get_api_data_utils import upsert_data, rename_columns, get_db_expected_columns, audit_df_columns, normalize_df_columns
+from get_api_data_utils import (get_db_data, get_api, convert_columns, get_db_integration, upsert_data,
+                                rename_columns, get_db_expected_columns, audit_df_columns, normalize_df_columns)
 from app_config import DB_CONFIG
 from db_utils import get_mysql_engine, clear_staging_table
 

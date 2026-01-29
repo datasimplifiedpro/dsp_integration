@@ -5,6 +5,7 @@ from datetime import datetime
 import requests
 import pandas as pd
 import numpy as np
+import re
 from pandas import DataFrame
 from pymysql import Error
 from six import integer_types
@@ -37,13 +38,74 @@ Updates:
 20250410 - MMA - Created Original VERSION
 
 """
+# ------------------------------------------------------------------------
 
 
 
 
-def get_db_integration(id):
+def detect_mysql_type(series):
+    if series.dropna().empty:
+        return 'VARCHAR(255)'
+
+    # Get first non-null value
+    val = str(series.dropna().iloc[0]).strip()
+
+    # Regex Patterns
+    patterns = {
+        # Matches: 2026-01-28 15:54:06, 2026-01-28T15:54Z, 2026-01-28 15:54
+        'DATETIME': r'^\d{4}-\d{2}-\d{2}[ T]\d{1,2}:\d{2}(?::\d{2})?Z?$',
+
+        # Matches: 2026-01-28, 01/28/2026, Jan 28, 2026
+        'DATE': [
+            r'^\d{4}-\d{2}-\d{2}$',
+            r'^\d{1,2}[/-]\d{1,2}[/-]\d{2,4}$',
+            r'^[a-zA-Z]{3,9}[\s-]\d{1,2}[,\s-]+\d{4}$'
+        ],
+
+        # Matches: 15:54:06, 11:34, 11:34 AM, 11:34:56PM
+        'TIME': r'^\d{1,2}:\d{2}(?::\d{2})?(\s?[AP]M)?$'
+    }
+
+    for db_type, regex in patterns.items():
+        if isinstance(regex, list):
+            for r in regex:
+                if re.match(r, val, re.IGNORECASE):
+                    return db_type
+        else:
+            if re.match(regex, val, re.IGNORECASE):
+                return db_type
+
+    return 'VARCHAR(255)'
+
+
+# --- Test Scenarios ---
+test_cases = {
+    'standard_sql': ['2026-01-09 00:17:58'],
+    'short_time': ['11:34'],
+    'ampm_time': ['11:34 PM'],
+    'iso_no_seconds': ['2026-01-28T15:54Z']
+}
+
+for name, val in test_cases.items():
+    print(f"{name}: {detect_mysql_type(pd.Series(val))}")
+
+
+data = {
+    'col_a': ['2026-01-28T15:00:00Z'], # DATETIME
+    'col_b': ['01/28/2026'],            # DATE
+    'col_c': ['January 28, 2026'],      # DATE
+    'col_d': ['12:30:45']               # TIME
+}
+
+df = pd.DataFrame(data)
+for col in df.columns:
+    print(f"Column '{col}' should be MySQL type: {detect_mysql_type(df[col])}")
+# ------------------------------------------------------------------------
+
+
+def get_db_integration_sample(id):
     try:
-        df = pd.read_sql(f"select * from vw_integration where integration_id = {id}", con=engine)
+        df = pd.read_sql(f"select * from vw_integration_sample where integration_id = {id}", con=engine)
     except Error as e:
         print("Error reading vw_integration:", e)
     return df
@@ -53,16 +115,24 @@ def create_api_header(header_template, vaultid, itemid):
     # This is what we will use for fetching fields from a specific vault and item
     creds = asyncio.run(get_1p_secret(vaultid, itemid))
 
-    auth = get_valid_token()
-    credential = creds.get('credential')
-    site_id = creds.get('site_id')
+    header = header_template.format(**creds)
 
-    header_json = json.loads(header_template)
+    headers = json.loads(header)
 
-    headers = {
-        k: v.format(credential=credential, site_id=site_id, auth=auth)
-        for k, v in header_json.items()
-    }
+    # # auth = get_valid_token()
+    # credential = creds.get('credential')
+    # site_id = creds.get('site_id')
+    # # {'Accept': 'application/json', 'Api-Key': '{credential}', 'Authorization': '{auth}', 'SiteId': '{site_id}'}
+    #
+    #
+    # # "Accept": "application/json",
+    # # "Api-Key": {credential},
+    # # "SiteId": {site_id}
+    #
+    # headers = {
+    #     k: v.format(credential=credential, site_id=site_id, auth=auth)
+    #     for k, v in header_json.items()
+    # }
 
     print(headers)
     return headers
@@ -84,7 +154,7 @@ def get_api_sample(url, header, node_name):
 
         # node_name = str(node_name).strip()
 
-        flattened_df = pd.json_normalize(data[node_name])
+        flattened_df = pd.json_normalize(data[node_name], sep='_')
         # print(flattened_df)
 
         # Check list of dataframe columns
@@ -119,17 +189,20 @@ def detect_column_types(df):
             column_types[col] = "VARCHAR(50)"
             continue
 
+        # what about 'email_optin' column name?
         if fnmatch(name, "*email*"):
-            column_types[col] = "VARCHAR(255)"
+            column_types[col] = "VARCHAR(150)"
             continue
 
         if fnmatch(name, "*url*"):
-            column_types[col] = "VARCHAR(2048)"
+            column_types[col] = "VARCHAR(250)"
             continue
 
         if fnmatch(name, "*zip*") or fnmatch(name, "*postal*"):
             column_types[col] = "VARCHAR(20)"
             continue
+
+        # let's add address*, city
 
         dtype_str = str(df[col].dtype)
 
@@ -189,7 +262,7 @@ def detect_column_types(df):
 
     return column_types
 
-def create_exectute_table_sql(table_name, column_types):
+def create_execute_table_sql(db_name, table_name, column_types):
 
     column_definitions = []
 
@@ -203,30 +276,75 @@ def create_exectute_table_sql(table_name, column_types):
         # else:
         column_definitions.append(f"`{col_name}` {mysql_type}")
 
-    create_sql_main = f"""
-        CREATE TABLE IF NOT EXISTS `{table_name}` (
-            {', '.join(column_definitions)}
-        )
-        """
+    # create_sql_main = f"""
+    #     CREATE TABLE IF NOT EXISTS `{db_name}.{table_name}` (
+    #         {', '.join(column_definitions)}
+    #     )
+    #     """
     create_sql_staging = f"""
-             CREATE TABLE IF NOT EXISTS `staging_{table_name}` (
+             CREATE TABLE IF NOT EXISTS {db_name}.`{table_name}` (
                 {', '.join(column_definitions)}
             )
             """
 
     with engine.begin() as conn:
-        conn.execute(text(create_sql_main))
+        # conn.execute(text(create_sql_main))
         conn.execute(text(create_sql_staging))
     print(f"✓ Table '{table_name}' created successfully")
 
 
-def get_db_tabel_metadata(table_name, db_name):
+def get_db_table_metadata(table_name, db_name, integration_id, client_id=0):
 
     try:
-        df = pd.read_sql(f"""select table_name, column_name, ordinal_position, column_default, is_nullable, column_type, column_key, extra  
-                         from information_schema.columns 
-                         where table_name = '{table_name}' and table_schema = '{db_name}'
-                         order by ordinal_position""", con=engine)
+        df = pd.read_sql(f"""
+            insert
+                into
+                api_metadata.integration_columns(client_id,
+                integration_id,
+                api_column_name,
+                column_name,
+                ORDINAL_POSITION,
+                is_nullable,
+                COLUMN_DEFAULT,
+                COLUMN_TYPE,
+                df_column_type,
+                COLUMN_KEY,
+                EXTRA,
+                load_at_runtime,
+                active)
+            select
+                {client_id} as client_id,
+                {integration_id} as integration_id,
+                column_name as api_column_name,
+                replace(replace(lower(column_name), ' ', '_'), '.', '_') as column_name,
+                ordinal_position,
+                case
+                    is_nullable when 'YES' then 1
+                    else 0
+                end as is_nullable,
+                column_default,
+                column_type,
+                case column_type 
+                    when 'tinyint' then 'bool'
+                    when 'int' then 'numeric'
+                    when 'int unsigned' then 'numeric'
+                    when 'double' then 'numeric'
+                    when 'bigint' then 'numeric'
+                    when 'date' then 'date'
+                    when 'datetime' then 'datetime'
+                end as df_column_type,
+                column_key,
+                extra,
+                0 as load_at_runtime,
+                1 as active
+            from
+                information_schema.columns
+            where
+                table_name = '{table_name}'
+                and table_schema = '{db_name}'
+            order by
+                ordinal_position
+            """, con=engine)
     except Error as e:
         print(f"Error extracting the metadata for table {table_name}", e)
     return df

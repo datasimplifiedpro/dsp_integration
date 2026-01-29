@@ -52,7 +52,12 @@ Updates:
 
 """
 
-
+def get_db_integration(id):
+    try:
+        df = pd.read_sql(f"select * from vw_integration where integration_id = {id}", con=engine)
+    except Error as e:
+        print("Error reading vw_integration:", e)
+    return df
 
 
 def get_df_column_types(clientid, integrationid):
