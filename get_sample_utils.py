@@ -41,7 +41,7 @@ Updates:
 # ------------------------------------------------------------------------
 
 
-
+sql = """call AnalyzeTableColumns('staging','smpl_mb_sales')"""
 
 def detect_mysql_type(series):
     if series.dropna().empty:

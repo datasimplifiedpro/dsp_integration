@@ -76,7 +76,6 @@ def run_etl(parameters, run_id=None, start_time=None):
 
     df= get_api_sample(url, headers, data_node_name)
     df["etlrunid"] = run_id
-    df['index'] = None
 
     print(len(df))
     if not df.empty:
